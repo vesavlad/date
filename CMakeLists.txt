@@ -20,16 +20,19 @@ cmake_minimum_required( VERSION 3.7 )
 project( date VERSION 2.4.1 )
 
 include( GNUInstallDirs )
+include( cmake/pkg.cmake )
 
 get_directory_property( has_parent PARENT_DIRECTORY )
 
 # Override by setting on CMake command line.
 set( CMAKE_CXX_STANDARD 17 CACHE STRING "The C++ standard whose features are requested." )
 
-option( USE_SYSTEM_TZ_DB "Use the operating system's timezone database" ON )
+option( USE_RES_TZ_DB "Use embedded DB" ON )
+option( USE_SYSTEM_TZ_DB "Use the operating system's timezone database" OFF )
 option( MANUAL_TZ_DB "User will set TZ DB manually by invoking set_install in their code" OFF )
 option( USE_TZ_DB_IN_DOT "Save the timezone database in the current folder" OFF )
 option( BUILD_SHARED_LIBS  "Build a shared version of library" OFF )
+option( ENABLE_DATE_INSTALL "Add installation for date library" OFF )
 option( ENABLE_DATE_TESTING "Enable unit tests" OFF )
 option( DISABLE_STRING_VIEW "Disable string view" OFF )
 option( COMPILE_WITH_C_LOCALE "define ONLY_C_LOCALE=1" OFF )
@@ -101,7 +104,7 @@ if( BUILD_TZ_LIB )
         $<INSTALL_INTERFACE:include> )
     target_compile_definitions( tz
         PRIVATE
-            AUTO_DOWNLOAD=$<IF:$<OR:$<BOOL:${USE_SYSTEM_TZ_DB}>,$<BOOL:${MANUAL_TZ_DB}>>,0,1>
+            AUTO_DOWNLOAD=0
             HAS_REMOTE_API=$<IF:$<OR:$<BOOL:${USE_SYSTEM_TZ_DB}>,$<BOOL:${MANUAL_TZ_DB}>>,0,1>
             $<$<AND:$<BOOL:${WIN32}>,$<BOOL:${BUILD_SHARED_LIBS}>>:DATE_BUILD_DLL=1>
             $<$<BOOL:${USE_TZ_DB_IN_DOT}>:INSTALL=.>
@@ -110,6 +113,12 @@ if( BUILD_TZ_LIB )
         INTERFACE
             $<$<AND:$<BOOL:${WIN32}>,$<BOOL:${BUILD_SHARED_LIBS}>>:DATE_USE_DLL=1> )
     set(TZ_HEADERS include/date/tz.h)
+    if (USE_RES_TZ_DB)
+        target_compile_definitions(tz PRIVATE DATE_EMBED_TZ_DB)
+        file(GLOB ianatzdb-files ${CMAKE_CURRENT_SOURCE_DIR}/ianatzdb/*)
+        create_resource(${CMAKE_CURRENT_SOURCE_DIR}/ianatzdb "${ianatzdb-files}" ianatzdb)
+        target_link_libraries(tz PUBLIC ianatzdb ianatzdb-res)
+    endif()
     if( IOS )
         list(APPEND TZ_HEADERS include/date/ios.h)
     endif( )
@@ -122,7 +131,7 @@ if( BUILD_TZ_LIB )
         find_package( Threads )
         target_link_libraries( tz PUBLIC Threads::Threads )
     endif( )
-    if( NOT USE_SYSTEM_TZ_DB AND NOT MANUAL_TZ_DB )
+    if( NOT USE_RES_TZ_DB AND NOT USE_SYSTEM_TZ_DB AND NOT MANUAL_TZ_DB )
         find_package( CURL REQUIRED )
         target_include_directories( tz SYSTEM PRIVATE ${CURL_INCLUDE_DIRS} )
         target_link_libraries( tz PRIVATE ${CURL_LIBRARIES} )
@@ -132,45 +141,47 @@ endif( )
 #[===================================================================[
    installation
 #]===================================================================]
-set( version_config "${CMAKE_CURRENT_BINARY_DIR}/dateConfigVersion.cmake" )
+if (ENABLE_DATE_INSTALL)
+    set( version_config "${CMAKE_CURRENT_BINARY_DIR}/dateConfigVersion.cmake" )
 
-include( CMakePackageConfigHelpers )
-write_basic_package_version_file( "${version_config}"
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY SameMajorVersion )
+    include( CMakePackageConfigHelpers )
+    write_basic_package_version_file( "${version_config}"
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion )
 
-install( TARGETS date
-    EXPORT dateConfig
-    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/date )
-export( TARGETS date NAMESPACE date:: FILE dateTargets.cmake )
-if (CMAKE_VERSION VERSION_LESS 3.15)
-    install(
-        FILES include/date/date.h
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/date )
-endif ()
-
-if( BUILD_TZ_LIB )
-    install( TARGETS tz
+    install( TARGETS date
         EXPORT dateConfig
-        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/date
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} )  # This is for Windows
-    export( TARGETS tz NAMESPACE date:: APPEND FILE dateTargets.cmake )
-endif( )
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/date )
+    export( TARGETS date NAMESPACE date:: FILE dateTargets.cmake )
+    if (CMAKE_VERSION VERSION_LESS 3.15)
+        install(
+            FILES include/date/date.h
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/date )
+    endif ()
 
-if( WIN32 AND NOT CYGWIN)
-    set( CONFIG_LOC CMake )
-else( )
-    set( CONFIG_LOC "${CMAKE_INSTALL_LIBDIR}/cmake/date" )
-endif( )
-install( EXPORT dateConfig
-  FILE dateTargets.cmake
-  NAMESPACE date::
-  DESTINATION ${CONFIG_LOC} )
-install (
-  FILES cmake/dateConfig.cmake "${version_config}"
-  DESTINATION ${CONFIG_LOC})
+    if( BUILD_TZ_LIB )
+        install( TARGETS tz
+            EXPORT dateConfig
+            PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/date
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} )  # This is for Windows
+        export( TARGETS tz NAMESPACE date:: APPEND FILE dateTargets.cmake )
+    endif( )
+
+    if( WIN32 AND NOT CYGWIN)
+        set( CONFIG_LOC CMake )
+    else( )
+        set( CONFIG_LOC "${CMAKE_INSTALL_LIBDIR}/cmake/date" )
+    endif( )
+    install( EXPORT dateConfig
+      FILE dateTargets.cmake
+      NAMESPACE date::
+      DESTINATION ${CONFIG_LOC} )
+    install (
+      FILES cmake/dateConfig.cmake "${version_config}"
+      DESTINATION ${CONFIG_LOC})
+endif()
 
 #[===================================================================[
    testing

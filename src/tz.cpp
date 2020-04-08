@@ -91,6 +91,9 @@
 #  define TARGET_OS_IPHONE 0
 #endif
 
+#if defined(DATE_EMBED_TZ_DB)
+#  include "ianatzdb.h"
+#endif
 #if USE_OS_TZDB
 #  include <dirent.h>
 #endif
@@ -162,7 +165,7 @@
 #if defined(_MSC_VER) && defined(SHORTENED_CURL_INCLUDE)
    // For rmt_curl nuget package
 #  include <curl.h>
-#else
+#elseif !defined(DATE_EMBED_TZ_DB)
 #  include <curl/curl.h>
 #endif
 #endif
@@ -528,6 +531,10 @@ load_timezone_mappings_from_xml_file(const std::string& input_path)
     std::vector<detail::timezone_mapping> mappings;
     std::string line;
 
+#if defined(DATE_EMBED_TZ_DB)
+    auto const res = ianatzdb::get_resource("abc");
+    std::stringstream is(std::string((char const*) res.ptr_, res.size_));
+#else
     std::ifstream is(input_path);
     if (!is.is_open())
     {
@@ -537,6 +544,8 @@ load_timezone_mappings_from_xml_file(const std::string& input_path)
         msg += "\".";
         throw std::runtime_error(msg);
     }
+#endif
+
 
     auto error = [&input_path, &line_num](const char* info)
     {
@@ -666,7 +675,6 @@ load_timezone_mappings_from_xml_file(const std::string& input_path)
         }
     }
 
-    is.close();
     return mappings;
 }
 
@@ -2767,7 +2775,7 @@ file_exists(const std::string& filename)
 #endif
 }
 
-#if HAS_REMOTE_API
+#if defined(HAS_REMOTE_API) && !defined(DATE_EMBED_TZ_DB)
 
 // CURL tools
 
@@ -3367,7 +3375,9 @@ init_tzdb()
     bool continue_zone = false;
     std::unique_ptr<tzdb> db(new tzdb);
 
-#if AUTO_DOWNLOAD
+#if DATE_EMBED_TZ_DB
+    db->version = "2019c";
+#elif AUTO_DOWNLOAD
     if (!file_exists(install))
     {
         auto rv = remote_version();
@@ -3424,7 +3434,12 @@ init_tzdb()
 
     for (const auto& filename : files)
     {
-        std::ifstream infile(path + filename);
+#if defined(DATE_EMBED_TZ_DB)
+      auto const res = ianatzdb::get_resource(filename);
+      std::stringstream infile(std::string((char const*) res.ptr_, res.size_));
+#else
+      std::ifstream infile(path + filename);
+#endif
         while (infile)
         {
             std::getline(infile, line);
@@ -3473,6 +3488,7 @@ init_tzdb()
     std::sort(db->leap_seconds.begin(), db->leap_seconds.end());
     db->leap_seconds.shrink_to_fit();
 
+    auto const res = ianatzdb::get_resource("abc");
 #ifdef _WIN32
     std::string mapping_file = get_install() + folder_delimiter + "windowsZones.xml";
     db->mappings = load_timezone_mappings_from_xml_file(mapping_file);
