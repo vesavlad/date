@@ -41,21 +41,6 @@ if( ENABLE_DATE_TESTING AND NOT BUILD_TZ_LIB )
     set (BUILD_TZ_LIB ON CACHE BOOL "required for testing" FORCE)
 endif( )
 
-function( print_option OPT )
-    if ( NOT DEFINED PRINT_OPTION_CURR_${OPT} OR ( NOT PRINT_OPTION_CURR_${OPT} STREQUAL ${OPT} ) )
-        set( PRINT_OPTION_CURR_${OPT} ${${OPT}} CACHE BOOL "" )
-        mark_as_advanced(PRINT_OPTION_CURR_${OPT})
-        message( "# date: ${OPT} ${${OPT}}" )
-    endif( )
-endfunction( )
-
-print_option( USE_SYSTEM_TZ_DB )
-print_option( MANUAL_TZ_DB )
-print_option( USE_TZ_DB_IN_DOT )
-print_option( BUILD_SHARED_LIBS  )
-print_option( ENABLE_DATE_TESTING )
-print_option( DISABLE_STRING_VIEW )
-
 #[===================================================================[
    date (header only) library
 #]===================================================================]
