@@ -1,4 +1,4 @@
 [res]
-  url=git@github.com:motis-project/res.git
+  url=git@github.com:vesavlad/res.git
   branch=master
-  commit=b5d496a34ca2d702c18160a728b4f1f7cfc3aac2
+  commit=9f16231550ab22f031d77e555fb551681380fc71
